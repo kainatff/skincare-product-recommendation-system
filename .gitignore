@@ -1,0 +1,111 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# =========================
+# Virtual Environment
+# =========================
+venv/
+env/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =========================
+# Jupyter Notebook
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Distribution / Packaging
+# =========================
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Unit test / coverage
+# =========================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+pytest_cache/
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# =========================
+# Streamlit
+# =========================
+.streamlit/
+
+# =========================
+# Model Files (IMPORTANT for ML)
+# =========================
+models/
+*.pkl
+*.joblib
+*.h5
+*.model
+
+# =========================
+# Dataset Files
+# =========================
+data/
+datasets/
+*.csv
+*.xlsx
+*.json
+*.parquet
+
+# =========================
+# NLTK Downloads
+# =========================
+nltk_data/
+
+# =========================
+# Cache / Temp
+# =========================
+.cache/
+temp/
+tmp/
+
+# =========================
+# OS Files
+# =========================
+Thumbs.db
+Desktop.ini
