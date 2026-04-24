@@ -72,12 +72,12 @@ def evaluate_model(model_name: str, recommender, reviews_test: pd.DataFrame,
                                    {k: [] for k in k_values}, \
                                    {k: [] for k in k_values}
 
-    users = reviews_test['author_id'].unique()
+    users = reviews_test['user_id'].unique()
     n_eval = min(300, len(users))  # cap for speed
     sampled_users = np.random.choice(users, n_eval, replace=False)
 
     for uid in sampled_users:
-        user_test = reviews_test[reviews_test['author_id'] == uid]
+        user_test = reviews_test[reviews_test['user_id'] == uid]
         relevant  = set(user_test[user_test['rating'] >= rating_threshold]['product_id'])
         all_ids   = set(user_test['product_id'])
 

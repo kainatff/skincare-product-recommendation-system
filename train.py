@@ -5,12 +5,12 @@ Usage: python train.py
 
 import pandas as pd
 import numpy as np
-from surprise.model_selection import train_test_split as s_split
+from sklearn.model_selection import train_test_split
 
 from src.data_loader import load_data, clean_products, clean_reviews
 from src.content_based import ContentBasedRecommender
 from src.collaborative_filtering import (
-    UserBasedCF, ItemBasedCF, SVDRecommender, build_surprise_dataset
+    UserBasedCF, ItemBasedCF, SVDRecommender
 )
 from src.hybrid_model import IngredientAwareHybrid
 from src.evaluation import evaluate_model, plot_comparison
@@ -19,9 +19,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# ── 1. Load & Clean ──────────────────────────────────────────
 # ── 1. Load Cleaned Data ─────────────────────────────────────
-
 print("=== Step 1: Loading cleaned data ===")
 
 products, reviews = load_data(
@@ -30,12 +28,12 @@ products, reviews = load_data(
 )
 
 print(f"Products: {products.shape}")
-print(f"Reviews: {reviews.shape}")
+print(f"Reviews:  {reviews.shape}")
+
 
 # ── 2. Content-Based Model ───────────────────────────────────
 print("\n=== Step 2: Content-Based Model ===")
 
-# 👉 Create combined text features (IMPORTANT FIX)
 products['combined_features'] = (
     products['ingredients'].fillna('') + ' ' +
     products['highlights'].fillna('') + ' ' +
@@ -46,37 +44,81 @@ products['combined_features'] = (
 )
 
 cbr = ContentBasedRecommender()
-cbr.fit(products)   # make sure your model uses 'combined_features'
+cbr.fit(products)
 cbr.save()
+print("Content-based model saved.")
 
 
 # ── 3. Collaborative Filtering ───────────────────────────────
 print("\n=== Step 3: Collaborative Filtering ===")
 
-print("\nSampling reviews for CF training...")
+print("Sampling reviews for CF training...")
 
-reviews_sample = reviews.sample(
-    frac=0.25,   # use 25% of data
-    random_state=42
-)
+# Drop leftover pandas index column saved as unnamed (common when CSV was
+# written with df.to_csv() without index=False)
+reviews = reviews.loc[:, ~reviews.columns.str.match(r'^Unnamed')]
 
+# ── Auto-detect column names ──────────────────────────────────
+_USER_ALIASES    = ['author_id', 'user_id', 'reviewer_id', 'reviewerid', 'userid', 'user']
+_PRODUCT_ALIASES = ['product_id', 'item_id', 'asin', 'productid', 'prod_id', 'product']
+_RATING_ALIASES  = ['rating', 'stars', 'score', 'review_rating', 'overall']
+
+def _find_col(df, aliases, label):
+    cols_lower = {c.lower(): c for c in df.columns}
+    for a in aliases:
+        if a in cols_lower:
+            return cols_lower[a]
+    raise KeyError(
+        f"Could not find a '{label}' column. "
+        f"Tried: {aliases}. Available: {list(df.columns)}"
+    )
+
+user_col    = _find_col(reviews, _USER_ALIASES,    'user_id')
+product_col = _find_col(reviews, _PRODUCT_ALIASES, 'product_id')
+rating_col  = _find_col(reviews, _RATING_ALIASES,  'rating')
+
+print(f"Using columns → user='{user_col}'  product='{product_col}'  rating='{rating_col}'")
+
+# Normalise to standard names so the rest of the code (and CF models) is consistent
+reviews = reviews.rename(columns={
+    user_col:    'user_id',
+    product_col: 'product_id',
+    rating_col:  'rating',
+})
+
+reviews_sample = reviews.sample(frac=0.25, random_state=42)
 print(f"Sample size: {len(reviews_sample)}")
 
-data = build_surprise_dataset(reviews_sample)
+# Split into train / test using sklearn — no surprise needed
+train_reviews, test_reviews = train_test_split(
+    reviews_sample, test_size=0.2, random_state=42
+)
 
-trainset, testset = s_split(data, test_size=0.2, random_state=42)
+# Build the user-item rating matrix from training data
+# Shape: (n_users, n_products); missing entries filled with 0
+train_matrix = (
+    train_reviews
+    .pivot_table(index='user_id', columns='product_id',
+                 values='rating', aggfunc='mean')
+    .fillna(0)
+)
+
+print(f"Rating matrix shape: {train_matrix.shape}")
 
 user_cf = UserBasedCF(k=10)
-user_cf.fit(data)
+user_cf.fit(train_matrix)
 user_cf.save()
+print("UserCF saved.")
 
 item_cf = ItemBasedCF(k=10)
-item_cf.fit(data)
+item_cf.fit(train_matrix)
 item_cf.save()
+print("ItemCF saved.")
 
-svd = SVDRecommender(n_factors=100, n_epochs=20)
-svd.fit(data)
+svd = SVDRecommender(n_factors=100)
+svd.fit(train_matrix)
 svd.save()
+print("SVD saved.")
 
 
 # ── 4. Hybrid Model ──────────────────────────────────────────
@@ -87,7 +129,6 @@ hybrid = IngredientAwareHybrid(
     cf_weight=0.6,
     content_weight=0.4
 )
-
 hybrid.fit(products)
 hybrid.save()
 
@@ -101,21 +142,13 @@ print("\n=== Step 5: Evaluation ===")
 reviews_test = reviews.sample(frac=0.2, random_state=42)
 
 results = []
-
-for name, model in [
-    ('UserCF', user_cf),
-    ('ItemCF', item_cf),
-    ('SVD', svd)
-]:
+for name, model in [('UserCF', user_cf), ('ItemCF', item_cf), ('SVD', svd)]:
     r = evaluate_model(name, model, reviews_test, products)
     results.append(r)
-
     print(f"\n[{name}] Results:")
     for k, v in r.items():
         if k != 'model':
             print(f"  {k}: {v:.4f}")
 
-
 plot_comparison(results)
-
 print("\n=== Training complete! All models saved to models/ ===")

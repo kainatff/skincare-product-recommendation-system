@@ -1,549 +1,278 @@
-import pandas as pd
-import numpy as np
-from surprise import (
-    SVD,
-    KNNWithMeans,
-    Dataset,
-    Reader,
-    accuracy
-)
-from surprise.model_selection import GridSearchCV
-import pickle
+"""
+Collaborative filtering models using scikit-learn only (no surprise).
+
+Three models are provided:
+  - UserBasedCF  : user-user k-NN on the rating matrix
+  - ItemBasedCF  : item-item k-NN on the transposed rating matrix
+  - SVDRecommender: matrix factorisation via TruncatedSVD
+
+All three share the same interface:
+  .fit(rating_matrix)   — rating_matrix is a pd.DataFrame (users × products)
+  .predict(user_id, product_id) → float
+  .recommend(user_id, n) → list of (product_id, score)
+  .save() / .load()
+"""
+
 import os
+import pickle
+import numpy as np
+import pandas as pd
+from sklearn.neighbors import NearestNeighbors
+from sklearn.decomposition import TruncatedSVD
+from sklearn.preprocessing import normalize
+
+MODEL_DIR = "models"
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 
-# ─────────────────────────────────────────────────────────────
-# BUILD SURPRISE DATASET
-# ─────────────────────────────────────────────────────────────
+# ─── helpers ────────────────────────────────────────────────────────────────
 
-def build_surprise_dataset(reviews: pd.DataFrame):
-    """
-    Build Surprise dataset from reviews dataframe.
+def _save(obj, path: str):
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f)
 
-    Required columns:
-        author_id
-        product_id
-        rating
-    """
-
-    print("[CF] Preparing dataset...")
-
-    df = reviews.copy()
-
-    required_cols = [
-        "author_id",
-        "product_id",
-        "rating"
-    ]
-
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column: {col}")
-
-    df = df.dropna(
-        subset=[
-            "author_id",
-            "product_id",
-            "rating"
-        ]
-    )
-
-    df["author_id"] = df["author_id"].astype(str)
-    df["product_id"] = df["product_id"].astype(str)
-    df["rating"] = df["rating"].astype(float)
-
-    reader = Reader(rating_scale=(1, 5))
-
-    data = Dataset.load_from_df(
-        df[
-            [
-                "author_id",
-                "product_id",
-                "rating"
-            ]
-        ],
-        reader
-    )
-
-    print(f"[CF] Dataset ready: {len(df)} ratings")
-
-    return data
+def _load(path: str):
+    with open(path, 'rb') as f:
+        return pickle.load(f)
 
 
-# ─────────────────────────────────────────────────────────────
-# USER-BASED COLLABORATIVE FILTERING
-# ─────────────────────────────────────────────────────────────
+# ─── User-Based CF ──────────────────────────────────────────────────────────
 
 class UserBasedCF:
+    """
+    Predicts a rating for (user, item) by finding the k most similar users
+    (cosine similarity on their rating vectors) and averaging their ratings
+    for that item.
+    """
 
-    def __init__(self, k=20):
-
+    def __init__(self, k: int = 10):
         self.k = k
+        self.nn = NearestNeighbors(n_neighbors=k + 1,   # +1 because user matches itself
+                                   metric='cosine',
+                                   algorithm='brute')
+        self.matrix: pd.DataFrame | None = None          # users × products
+        self._path = os.path.join(MODEL_DIR, 'user_cf.pkl')
 
-        self.model = KNNWithMeans(
-            k=k,
-            min_k=3,
-            sim_options={
-                "name": "cosine",
-                "user_based": True
-            },
-            verbose=False
-        )
+    # ── fit ────────────────────────────────────────────────────────────────
+    def fit(self, rating_matrix: pd.DataFrame):
+        """
+        Parameters
+        ----------
+        rating_matrix : pd.DataFrame
+            Index = user_id, columns = product_id, values = mean rating (0 for missing).
+        """
+        self.matrix = rating_matrix
+        self.nn.fit(rating_matrix.values)
+        return self
 
-        self.trainset = None
-
-    # ---------------------------------------------------------
-
-    def fit(self, data):
-
-        self.trainset = data.build_full_trainset()
-
-        self.model.fit(self.trainset)
-
-        print(f"[UserBasedCF] Fitted with k={self.k}")
-
-    # ---------------------------------------------------------
-
-    def predict(self, user_id, product_id):
-
-        try:
-            pred = self.model.predict(
-                str(user_id),
-                str(product_id)
-            )
-            return pred.est
-
-        except Exception:
+    # ── predict ────────────────────────────────────────────────────────────
+    def predict(self, user_id, product_id) -> float:
+        if self.matrix is None:
+            raise RuntimeError("Model not fitted yet.")
+        if user_id not in self.matrix.index:
+            return self.matrix[product_id].mean() if product_id in self.matrix.columns else 0.0
+        if product_id not in self.matrix.columns:
             return 0.0
 
-    # ---------------------------------------------------------
+        user_vec = self.matrix.loc[user_id].values.reshape(1, -1)
+        distances, indices = self.nn.kneighbors(user_vec)
 
-    def recommend(
-        self,
-        user_id: str,
-        products: pd.DataFrame,
-        reviewed_ids: set,
-        n: int = 10
-    ) -> pd.DataFrame:
+        # indices[0][0] is the user itself — skip it
+        neighbour_idx = indices[0][1:]
+        neighbour_ratings = self.matrix.iloc[neighbour_idx][product_id].values
 
-        if self.trainset is None:
-            return pd.DataFrame()
+        # Only count neighbours who actually rated the product
+        rated_mask = neighbour_ratings > 0
+        if not rated_mask.any():
+            return self.matrix[product_id].mean()
 
-        candidates = [
-            pid
-            for pid in products["product_id"]
-            if pid not in reviewed_ids
+        weights = 1.0 - distances[0][1:][rated_mask]   # similarity = 1 − cosine_distance
+        weights = np.maximum(weights, 0)
+        total_w = weights.sum()
+        if total_w == 0:
+            return neighbour_ratings[rated_mask].mean()
+        return float(np.dot(weights, neighbour_ratings[rated_mask]) / total_w)
+
+    # ── recommend ──────────────────────────────────────────────────────────
+    def recommend(self, user_id, n: int = 10) -> list[tuple]:
+        """Return list of (product_id, predicted_score), highest score first."""
+        if self.matrix is None:
+            raise RuntimeError("Model not fitted yet.")
+
+        already_rated = set()
+        if user_id in self.matrix.index:
+            row = self.matrix.loc[user_id]
+            already_rated = set(row[row > 0].index)
+
+        scores = [
+            (pid, self.predict(user_id, pid))
+            for pid in self.matrix.columns
+            if pid not in already_rated
         ]
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:n]
 
-        preds = []
-
-        for pid in candidates:
-
-            rating = self.predict(
-                user_id,
-                pid
-            )
-
-            preds.append(
-                (
-                    pid,
-                    rating
-                )
-            )
-
-        preds.sort(
-            key=lambda x: x[1],
-            reverse=True
-        )
-
-        top = preds[:n]
-
-        top_df = pd.DataFrame(
-            top,
-            columns=[
-                "product_id",
-                "predicted_rating"
-            ]
-        )
-
-        return top_df.merge(
-            products[
-                [
-                    "product_id",
-                    "product_name",
-                    "brand_name",
-                    "price_usd",
-                    "rating"
-                ]
-            ],
-            on="product_id"
-        ).reset_index(drop=True)
-
-    # ---------------------------------------------------------
-
-    def evaluate(self, testset):
-
-        predictions = self.model.test(testset)
-
-        rmse = accuracy.rmse(
-            predictions,
-            verbose=False
-        )
-
-        mae = accuracy.mae(
-            predictions,
-            verbose=False
-        )
-
-        print(
-            f"[UserBasedCF] RMSE={rmse:.4f}  MAE={mae:.4f}"
-        )
-
-        return rmse, mae
-
-    # ---------------------------------------------------------
-
-    def save(
-        self,
-        path="models/user_cf.pkl"
-    ):
-
-        os.makedirs(
-            os.path.dirname(path),
-            exist_ok=True
-        )
-
-        with open(
-            path,
-            "wb"
-        ) as f:
-
-            pickle.dump(
-                self,
-                f
-            )
-
-    # ---------------------------------------------------------
+    # ── persistence ────────────────────────────────────────────────────────
+    def save(self):
+        _save(self, self._path)
 
     @classmethod
-    def load(
-        cls,
-        path="models/user_cf.pkl"
-    ):
-
-        with open(
-            path,
-            "rb"
-        ) as f:
-
-            return pickle.load(f)
+    def load(cls) -> 'UserBasedCF':
+        path = os.path.join(MODEL_DIR, 'user_cf.pkl')
+        return _load(path)
 
 
-# ─────────────────────────────────────────────────────────────
-# ITEM-BASED COLLABORATIVE FILTERING
-# ─────────────────────────────────────────────────────────────
+# ─── Item-Based CF ──────────────────────────────────────────────────────────
 
 class ItemBasedCF:
+    """
+    Predicts a rating for (user, item) by finding the k most similar items
+    (cosine similarity on their rating vectors across users) and averaging.
+    """
 
-    def __init__(self, k=20):
-
+    def __init__(self, k: int = 10):
         self.k = k
+        self.nn = NearestNeighbors(n_neighbors=k + 1,
+                                   metric='cosine',
+                                   algorithm='brute')
+        self.matrix: pd.DataFrame | None = None          # users × products
+        self._path = os.path.join(MODEL_DIR, 'item_cf.pkl')
 
-        self.model = KNNWithMeans(
-            k=k,
-            sim_options={
-                "name": "pearson_baseline",
-                "user_based": False
-            },
-            verbose=False
-        )
+    def fit(self, rating_matrix: pd.DataFrame):
+        self.matrix = rating_matrix
+        # fit on products × users (transposed)
+        self.nn.fit(rating_matrix.T.values)
+        return self
 
-        self.trainset = None
+    def predict(self, user_id, product_id) -> float:
+        if self.matrix is None:
+            raise RuntimeError("Model not fitted yet.")
+        if product_id not in self.matrix.columns:
+            return 0.0
+        if user_id not in self.matrix.index:
+            return self.matrix[product_id].mean()
 
-    # ---------------------------------------------------------
+        pid_idx = self.matrix.columns.get_loc(product_id)
+        item_vec = self.matrix.T.iloc[pid_idx].values.reshape(1, -1)
+        distances, indices = self.nn.kneighbors(item_vec)
 
-    def fit(self, data):
+        neighbour_pids = self.matrix.columns[indices[0][1:]]
+        user_ratings = self.matrix.loc[user_id, neighbour_pids].values
 
-        self.trainset = data.build_full_trainset()
+        rated_mask = user_ratings > 0
+        if not rated_mask.any():
+            return self.matrix[product_id].mean()
 
-        self.model.fit(self.trainset)
+        weights = 1.0 - distances[0][1:][rated_mask]
+        weights = np.maximum(weights, 0)
+        total_w = weights.sum()
+        if total_w == 0:
+            return user_ratings[rated_mask].mean()
+        return float(np.dot(weights, user_ratings[rated_mask]) / total_w)
 
-        print(f"[ItemBasedCF] Fitted with k={self.k}")
+    def recommend(self, user_id, n: int = 10) -> list[tuple]:
+        if self.matrix is None:
+            raise RuntimeError("Model not fitted yet.")
 
-    # ---------------------------------------------------------
+        already_rated = set()
+        if user_id in self.matrix.index:
+            row = self.matrix.loc[user_id]
+            already_rated = set(row[row > 0].index)
 
-    def get_similar_items(
-        self,
-        product_id,
-        n=10
-    ):
-
-        if self.trainset is None:
-            return []
-
-        try:
-
-            inner_id = self.trainset.to_inner_iid(
-                str(product_id)
-            )
-
-        except ValueError:
-            return []
-
-        neighbors = self.model.get_neighbors(
-            inner_id,
-            k=n
-        )
-
-        results = []
-
-        for iid in neighbors:
-
-            raw_id = self.trainset.to_raw_iid(iid)
-
-            score = self.model.sim[
-                inner_id
-            ][
-                iid
-            ]
-
-            results.append(
-                (
-                    raw_id,
-                    score
-                )
-            )
-
-        return sorted(
-            results,
-            key=lambda x: x[1],
-            reverse=True
-        )
-
-    # ---------------------------------------------------------
-
-    def recommend(
-        self,
-        user_id,
-        reviews,
-        products,
-        n=10
-    ):
-
-        user_reviews = reviews[
-            reviews["author_id"] == user_id
+        scores = [
+            (pid, self.predict(user_id, pid))
+            for pid in self.matrix.columns
+            if pid not in already_rated
         ]
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:n]
 
-        if user_reviews.empty:
-            return pd.DataFrame()
-
-        top_products = (
-            user_reviews
-            .nlargest(
-                5,
-                "rating"
-            )["product_id"]
-            .tolist()
-        )
-
-        reviewed_ids = set(
-            user_reviews["product_id"]
-        )
-
-        scored = {}
-
-        for pid in top_products:
-
-            neighbors = self.get_similar_items(
-                pid,
-                n=20
-            )
-
-            for sim_pid, score in neighbors:
-
-                if sim_pid not in reviewed_ids:
-
-                    scored[
-                        sim_pid
-                    ] = max(
-                        scored.get(
-                            sim_pid,
-                            0
-                        ),
-                        score
-                    )
-
-        if not scored:
-            return pd.DataFrame()
-
-        rec_df = pd.DataFrame(
-            scored.items(),
-            columns=[
-                "product_id",
-                "score"
-            ]
-        )
-
-        rec_df = rec_df.nlargest(
-            n,
-            "score"
-        )
-
-        return rec_df.merge(
-            products[
-                [
-                    "product_id",
-                    "product_name",
-                    "brand_name",
-                    "price_usd",
-                    "rating"
-                ]
-            ],
-            on="product_id"
-        ).reset_index(drop=True)
-
-    # ---------------------------------------------------------
-
-    def evaluate(self, testset):
-
-        preds = self.model.test(testset)
-
-        rmse = accuracy.rmse(
-            preds,
-            verbose=False
-        )
-
-        mae = accuracy.mae(
-            preds,
-            verbose=False
-        )
-
-        print(
-            f"[ItemBasedCF] RMSE={rmse:.4f}  MAE={mae:.4f}"
-        )
-
-        return rmse, mae
-
-    # ---------------------------------------------------------
-
-    def save(
-        self,
-        path="models/item_cf.pkl"
-    ):
-
-        os.makedirs(
-            os.path.dirname(path),
-            exist_ok=True
-        )
-
-        with open(
-            path,
-            "wb"
-        ) as f:
-
-            pickle.dump(
-                self,
-                f
-            )
-
-    # ---------------------------------------------------------
+    def save(self):
+        _save(self, self._path)
 
     @classmethod
-    def load(
-        cls,
-        path="models/item_cf.pkl"
-    ):
-
-        with open(
-            path,
-            "rb"
-        ) as f:
-
-            return pickle.load(f)
+    def load(cls) -> 'ItemBasedCF':
+        path = os.path.join(MODEL_DIR, 'item_cf.pkl')
+        return _load(path)
 
 
-# ─────────────────────────────────────────────────────────────
-# SVD MATRIX FACTORIZATION
-# ─────────────────────────────────────────────────────────────
+# ─── SVD Recommender ────────────────────────────────────────────────────────
 
 class SVDRecommender:
+    """
+    Matrix factorisation via sklearn TruncatedSVD.
 
-    def __init__(
-        self,
-        n_factors=100,
-        n_epochs=20
-    ):
+    The rating matrix R ≈ U · Σ · Vt.
+    Predicted ratings are reconstructed as R̂ = U · Σ · Vt.
+    """
 
-        self.model = SVD(
-            n_factors=n_factors,
-            n_epochs=n_epochs,
-            verbose=False
-        )
+    def __init__(self, n_factors: int = 100):
+        self.n_factors = n_factors
+        self.svd = TruncatedSVD(n_components=n_factors, random_state=42)
+        self.matrix: pd.DataFrame | None = None
+        self.reconstructed: np.ndarray | None = None
+        self._path = os.path.join(MODEL_DIR, 'svd.pkl')
 
-        self.trainset = None
+    def fit(self, rating_matrix: pd.DataFrame):
+        """
+        Parameters
+        ----------
+        rating_matrix : pd.DataFrame
+            Index = user_id, columns = product_id, values = mean rating (0 for missing).
+        """
+        self.matrix = rating_matrix
+        R = rating_matrix.values.astype(float)
 
-    # ---------------------------------------------------------
+        # Clamp n_components to be < min(shape)
+        max_factors = min(R.shape) - 1
+        n = min(self.n_factors, max_factors)
+        if n != self.n_factors:
+            print(f"  [SVD] Reducing n_factors from {self.n_factors} to {n} "
+                  f"(matrix is {R.shape})")
+            self.svd = TruncatedSVD(n_components=n, random_state=42)
 
-    def fit(self, data):
+        U = self.svd.fit_transform(R)           # (n_users, n_factors)
+        Vt = self.svd.components_               # (n_factors, n_products)
+        Sigma = np.diag(self.svd.singular_values_)
 
-        self.trainset = data.build_full_trainset()
+        self.reconstructed = U @ Sigma @ Vt     # (n_users, n_products) — full R̂
+        return self
 
-        self.model.fit(self.trainset)
-
-        print("[SVD] Fitted")
-
-    # ---------------------------------------------------------
-
-    def predict(
-        self,
-        user_id,
-        product_id
-    ):
-
-        try:
-
-            return self.model.predict(
-                str(user_id),
-                str(product_id)
-            ).est
-
-        except Exception:
-
+    def predict(self, user_id, product_id) -> float:
+        if self.matrix is None or self.reconstructed is None:
+            raise RuntimeError("Model not fitted yet.")
+        if user_id not in self.matrix.index or product_id not in self.matrix.columns:
             return 0.0
+        u_idx = self.matrix.index.get_loc(user_id)
+        p_idx = self.matrix.columns.get_loc(product_id)
+        return float(self.reconstructed[u_idx, p_idx])
 
-    # ---------------------------------------------------------
+    def recommend(self, user_id, n: int = 10) -> list[tuple]:
+        if self.matrix is None or self.reconstructed is None:
+            raise RuntimeError("Model not fitted yet.")
 
-    def save(
-        self,
-        path="models/svd.pkl"
-    ):
+        if user_id not in self.matrix.index:
+            # Cold-start: return globally highest-rated products
+            mean_scores = self.matrix.mean(axis=0)
+            top = mean_scores.nlargest(n)
+            return list(zip(top.index, top.values))
 
-        os.makedirs(
-            os.path.dirname(path),
-            exist_ok=True
+        u_idx = self.matrix.index.get_loc(user_id)
+        user_row = self.matrix.loc[user_id]
+        already_rated = set(user_row[user_row > 0].index)
+
+        scores = pd.Series(
+            self.reconstructed[u_idx],
+            index=self.matrix.columns
         )
+        scores = scores.drop(labels=list(already_rated), errors='ignore')
+        top = scores.nlargest(n)
+        return list(zip(top.index, top.values))
 
-        with open(
-            path,
-            "wb"
-        ) as f:
-
-            pickle.dump(
-                self,
-                f
-            )
-
-    # ---------------------------------------------------------
+    def save(self):
+        _save(self, self._path)
 
     @classmethod
-    def load(
-        cls,
-        path="models/svd.pkl"
-    ):
-
-        with open(
-            path,
-            "rb"
-        ) as f:
-
-            return pickle.load(f)
+    def load(cls) -> 'SVDRecommender':
+        path = os.path.join(MODEL_DIR, 'svd.pkl')
+        return _load(path)

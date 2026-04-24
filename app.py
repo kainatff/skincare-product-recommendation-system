@@ -47,8 +47,8 @@ skin_type = st.sidebar.selectbox("Skin type",
 skin_concern = st.sidebar.selectbox("Primary concern",
     list(SKIN_CONCERN_MAP.keys()))
 
-budget = st.sidebar.slider("Max budget (USD)", 5, 200, 80)
-n_recs = st.sidebar.slider("Number of recommendations", 5, 20, 10)
+budget  = st.sidebar.slider("Max budget (USD)", 5, 200, 80)
+n_recs  = st.sidebar.slider("Number of recommendations", 5, 20, 10)
 
 user_id = None
 if mode == "Existing User (by ID)":
@@ -64,7 +64,7 @@ with tab1:
     if run_btn:
         with st.spinner("Finding best products for you..."):
             if mode == "New User (no history)" or not user_id:
-                # Content-based only
+                # Content-based only — no CF needed
                 recs = cbr.recommend_for_user_profile(
                     skin_type=skin_type,
                     concerns=[skin_concern] + list(SKIN_CONCERN_MAP.get(skin_concern, [])),
@@ -73,12 +73,12 @@ with tab1:
                 )
                 method = "Content-Based Filtering"
             else:
-                # Hybrid
+                # Hybrid — passes the sklearn-based SVDRecommender
                 recs = hybrid.recommend(
                     user_id=user_id,
                     skin_type=skin_type,
                     skin_concern=skin_concern,
-                    cf_recommender=svd,
+                    cf_recommender=svd,        # SVDRecommender.recommend(user_id, n)
                     reviews=reviews,
                     n=n_recs
                 )
@@ -90,11 +90,14 @@ with tab1:
         else:
             st.success(f"Found {len(recs)} recommendations using **{method}**")
             for _, row in recs.iterrows():
-                with st.expander(f"**{row.get('product_name','N/A')}** — {row.get('brand_name','')}"):
+                with st.expander(
+                    f"**{row.get('product_name', 'N/A')}** — {row.get('brand_name', '')}"
+                ):
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Price", f"${row.get('price_usd', 0):.2f}")
+                    col1.metric("Price",  f"${row.get('price_usd', 0):.2f}")
                     col2.metric("Rating", f"{row.get('rating', 0):.1f} ⭐")
-                    col3.metric("Score",  f"{row.get('hybrid_score', row.get('relevance_score', 0)):.3f}")
+                    col3.metric("Score",
+                        f"{row.get('hybrid_score', row.get('relevance_score', 0)):.3f}")
                     if 'key_ingredients_found' in row:
                         st.markdown(f"**Active ingredients:** {row['key_ingredients_found']}")
                     if 'explanation' in row:
@@ -104,13 +107,16 @@ with tab2:
     st.subheader("Find similar products")
     product_name_input = st.text_input("Search product name")
     if product_name_input:
-        matches = products[products['product_name'].str.contains(
-            product_name_input, case=False, na=False)]
+        matches = products[
+            products['product_name'].str.contains(product_name_input, case=False, na=False)
+        ]
         if not matches.empty:
-            selected_pid = st.selectbox("Select product",
+            selected_pid = st.selectbox(
+                "Select product",
                 matches['product_id'].values,
                 format_func=lambda pid: matches[
-                    matches['product_id']==pid]['product_name'].values[0])
+                    matches['product_id'] == pid]['product_name'].values[0]
+            )
             if st.button("Find Similar"):
                 sims = cbr.recommend_for_product(selected_pid, n=10)
                 st.dataframe(sims, use_container_width=True)
@@ -123,6 +129,6 @@ with tab3:
         import matplotlib.pyplot as plt
         import matplotlib.image as mpimg
         img = mpimg.imread('reports/model_comparison.png')
-        st.image(img, use_column_width=True)
+        st.image(img, use_container_width=True)   # use_container_width replaces deprecated use_column_width
     except FileNotFoundError:
         st.info("Run `python train.py` first to generate evaluation charts.")
