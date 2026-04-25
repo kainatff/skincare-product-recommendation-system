@@ -1,6 +1,6 @@
 """
-Skincare Recommendation System — Redesigned UI
-Minimal, feminine, Notion-inspired aesthetic with soft pinks and generous whitespace.
+Skincare Recommendation System — Modernized UI
+Warm, playful, editorial aesthetic with fixed radio button styling.
 Run: streamlit run app.py
 """
 import streamlit as st
@@ -12,19 +12,19 @@ from src.hybrid_model import IngredientAwareHybrid, SKIN_CONCERN_MAP
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Skin Ritual",
-    page_icon="",
+    page_icon="🌸",
     layout="centered"
 )
 
 # ── Global styles ──────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600&display=swap');
 
 /* ── Reset & base ── */
 html, body, [data-testid="stAppViewContainer"] {
-    background: #fdf8f6 !important;
-    font-family: 'DM Sans', sans-serif;
+    background: #fef6f0 !important;
+    font-family: 'Outfit', sans-serif;
     font-weight: 300;
     color: #2d2520;
 }
@@ -32,260 +32,447 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stHeader"] { background: transparent !important; }
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; }
+#MainMenu, footer, header { visibility: hidden; }
 
 /* ── Main container ── */
 .block-container {
-    max-width: 720px !important;
-    padding: 4rem 2rem 8rem !important;
+    max-width: 740px !important;
+    padding: 3.5rem 2.5rem 8rem !important;
 }
 
-/* ── Hide Streamlit chrome ── */
-#MainMenu, footer, header { visibility: hidden; }
-
 /* ── Typography ── */
+.hero-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #c4836a;
+    margin-bottom: 0.8rem;
+    display: block;
+}
 .hero-title {
-    font-family: 'DM Serif Display', serif;
-    font-size: 3.3rem;
-    font-weight: 500;
-    line-height: 1.15;
+    font-family: 'Playfair Display', serif;
+    font-size: 3.6rem;
+    font-weight: 700;
+    line-height: 1.1;
     color: #1f1a17;
-    margin: 0 0 0.6rem;
+    margin: 0 0 1rem;
     letter-spacing: -0.02em;
 }
 .hero-title em {
     font-style: italic;
-    color:  #b8745e;;
+    color: #c4836a;
 }
 .hero-sub {
- font-size: 1.05rem;
+    font-size: 1.05rem;
     color: #8f7f78;
     font-weight: 300;
-    margin: 0 0 3.5rem;
-    }
+    margin: 0 0 2.5rem;
+    line-height: 1.7;
+    max-width: 480px;
+}
+
+/* ── Accent badge strip ── */
+.badge-strip {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+}
+.badge {
+    font-size: 0.72rem;
+    color: #c4836a;
+    background: #fff0ea;
+    border: 1px solid #f5d9cc;
+    border-radius: 50px;
+    padding: 0.3rem 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
 
 /* ── Section label ── */
 .section-label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: #a8644d;   /* stronger contrast */
-    margin: 2.5rem 0 1rem;
+    color: #c4836a;
+    margin: 2.8rem 0 0.9rem;
+    display: block;
+}
+
+/* ── Info panel ── */
+.info-panel {
+    background: #fff8f5;
+    border: 1px solid #f5d9cc;
+    border-radius: 14px;
+    padding: 1.1rem 1.4rem;
+    margin-bottom: 1.8rem;
+    font-size: 0.85rem;
+    color: #8f7f78;
+    line-height: 1.6;
 }
 
 /* ── Cards ── */
 .card {
     background: #ffffff;
-    border: 1px solid #f0e8e3;
-    border-radius: 16px;
-    padding: 1.6rem 1.8rem;
-    margin-bottom: 0.75rem;
-    transition: box-shadow 0.2s ease;
+    border: 1px solid #f0e6e0;
+    border-radius: 18px;
+    padding: 1.5rem 1.8rem;
+    margin-bottom: 0.8rem;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+.card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #c4836a, #e8a98f);
+    border-radius: 0 3px 3px 0;
+    opacity: 0;
+    transition: opacity 0.25s ease;
 }
 .card:hover {
-    box-shadow: 0 4px 24px rgba(196,131,106,0.10);
+    box-shadow: 0 8px 32px rgba(196,131,106,0.12);
+    transform: translateY(-2px);
+}
+.card:hover::before {
+    opacity: 1;
+}
+.card-rank {
+    position: absolute;
+    top: 1.2rem;
+    right: 1.5rem;
+    font-size: 0.7rem;
+    color: #e8cfc4;
+    font-weight: 600;
+    letter-spacing: 0.1em;
 }
 .card-product {
-    font-family: 'DM Serif Display', serif;
-    font-size: 1.15rem;
-    color: #2d2520;
-    margin: 0 0 0.15rem;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    color: #1f1a17;
+    margin: 0 0 0.2rem;
+    padding-right: 2.5rem;
 }
 .card-brand {
-    font-size: 0.8rem;
-    color: #b8a8a0;
-    font-weight: 400;
-    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+    color: #c4b0a8;
+    font-weight: 500;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.9rem;
 }
 .card-meta {
     display: flex;
-    gap: 1.5rem;
-    font-size: 0.88rem;
+    gap: 0.5rem;
+    font-size: 0.86rem;
     color: #7a6860;
+    align-items: center;
+    flex-wrap: wrap;
 }
-.card-meta span { display: flex; align-items: center; gap: 0.3rem; }
+.meta-price {
+    background: #f5f0ed;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-weight: 600;
+    color: #2d2520;
+    font-size: 0.84rem;
+}
+.meta-rating {
+    color: #c4836a;
+    font-weight: 500;
+}
 .card-ingredients {
     margin-top: 0.9rem;
     padding-top: 0.9rem;
     border-top: 1px solid #f5eeea;
-    font-size: 0.83rem;
+    font-size: 0.82rem;
     color: #9c8b84;
-    line-height: 1.6;
+    line-height: 1.8;
 }
 .card-pill {
     display: inline-block;
     background: #fdf0eb;
-    color: #c4836a;
+    color: #b8745e;
     border-radius: 50px;
-    padding: 3px 10px;
-    font-size: 0.75rem;
-    font-weight: 400;
-    margin: 0 4px 4px 0;
+    padding: 2px 10px;
+    font-size: 0.73rem;
+    font-weight: 500;
+    margin: 0 3px 3px 0;
+    border: 1px solid #f5d9cc;
+}
+
+/* ── Tabs ── */
+[data-testid="stTabs"] {
+    border-bottom: 1px solid #f0e6e0 !important;
 }
 [data-testid="stTabs"] button {
-    color: #7a6860 !important;
+    color: #b8a8a0 !important;
+    font-family: 'Outfit', sans-serif !important;
     font-weight: 400 !important;
-    opacity: 0.7;
+    font-size: 0.92rem !important;
     border-bottom: 2px solid transparent !important;
+    padding-bottom: 0.7rem !important;
 }
-
 [data-testid="stTabs"] button[aria-selected="true"] {
     color: #2d2520 !important;
-    font-weight: 500 !important;
-    opacity: 1;
-    border-bottom: 2px solid #b8745e !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid #c4836a !important;
 }
 
-/* ── Streamlit widget overrides ── */
+/* ── Selectbox ── */
 div[data-testid="stSelectbox"] > label,
-div[data-testid="stRadio"] > label,
 div[data-testid="stSlider"] > label {
-    font-size: 0.72rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.1em !important;
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
     text-transform: uppercase !important;
     color: #c4836a !important;
     margin-bottom: 0.4rem !important;
 }
-
-div[data-testid="stSelectbox"] > div > div,
-div[data-testid="stTextInput"] > div > div > input {
+div[data-testid="stSelectbox"] > div > div {
     background: #ffffff !important;
-    border: 1px solid #f0e8e3 !important;
-    border-radius: 10px !important;
-    font-family: 'DM Sans', sans-serif !important;
+    border: 1.5px solid #f0e6e0 !important;
+    border-radius: 12px !important;
+    font-family: 'Outfit', sans-serif !important;
     font-size: 0.92rem !important;
     color: #2d2520 !important;
     box-shadow: none !important;
+    transition: border-color 0.2s ease !important;
+}
+div[data-testid="stSelectbox"] > div > div:hover {
+    border-color: #c4836a !important;
 }
 
-div[data-testid="stSelectbox"] > div > div:hover,
+/* ── Text input ── */
+div[data-testid="stTextInput"] > label {
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: #c4836a !important;
+}
+div[data-testid="stTextInput"] > div > div > input {
+    background: #ffffff !important;
+    border: 1.5px solid #f0e6e0 !important;
+    border-radius: 12px !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 0.92rem !important;
+    color: #2d2520 !important;
+    box-shadow: none !important;
+    padding: 0.6rem 1rem !important;
+}
 div[data-testid="stTextInput"] > div > div > input:focus {
     border-color: #c4836a !important;
-    box-shadow: 0 0 0 2px rgba(196,131,106,0.12) !important;
+    box-shadow: 0 0 0 3px rgba(196,131,106,0.1) !important;
+}
+div[data-testid="stTextInput"] > div > div > input::placeholder {
+    color: #c4b0a8 !important;
 }
 
-/* Slider track */
-[data-testid="stSlider"] .st-emotion-cache-1gv3e14,
+/* ── Slider ── */
 [data-testid="stSlider"] div[role="slider"] {
-    background: #c4836a !important;
-}
-[data-testid="stSlider"] .stSlider > div > div > div > div {
-    background: #c4836a !important;
-}
-
-/* Radio buttons — force label text to always be dark and visible */
-[data-testid="stRadio"] label {
-    color: #2d2520 !important;
-    font-size: 0.9rem !important;
-}
-[data-testid="stRadio"] div[role="radio"] p,
-[data-testid="stRadio"] div[role="radio"] span {
-    color: #2d2520 !important;
-}
-[data-testid="stRadio"] div[role="radio"][aria-checked="true"] div {
     background: #c4836a !important;
     border-color: #c4836a !important;
 }
-[data-testid="stRadio"] div[role="radio"][aria-checked="true"] p,
-[data-testid="stRadio"] div[role="radio"][aria-checked="true"] span {
-    color: #2d2520 !important;
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"] {
+    color: #c4b0a8 !important;
+    font-size: 0.8rem !important;
+}
+
+/* ── RADIO BUTTONS — full fix for highlight/selection issue ── */
+/* Remove all browser text selection highlights */
+[data-testid="stRadio"] * {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    user-select: none !important;
+}
+
+/* Hide the default radio container label */
+[data-testid="stRadio"] > label {
+    display: none !important;
+}
+
+/* The outer radio group wrapper */
+[data-testid="stRadio"] > div {
+    display: flex !important;
+    gap: 0.7rem !important;
+    flex-wrap: wrap !important;
+}
+
+/* Each radio option wrapper — matches primary button style, slightly smaller */
+[data-testid="stRadio"] > div > label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    background: transparent !important;
+    border: 1.5px solid #2d2520 !important;
+    border-radius: 50px !important;
+    padding: 0.55rem 1.5rem !important;
+    cursor: pointer !important;
+    transition: all 0.25s ease !important;
+    font-family: 'Outfit', sans-serif !important;
     font-weight: 500 !important;
+    font-size: 0.82rem !important;
+    color: #2d2520 !important;
+    letter-spacing: 0.04em !important;
+    background-clip: padding-box !important;
+    box-shadow: 0 2px 8px rgba(45,37,32,0.08) !important;
+}
+
+[data-testid="stRadio"] > div > label:hover {
+    background: linear-gradient(135deg, #c4836a 0%, #d4957a 100%) !important;
+    border-color: #c4836a !important;
+    color: #fdf8f6 !important;
+    box-shadow: 0 4px 14px rgba(196,131,106,0.28) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Selected state — matches "Find my matches" dark gradient */
+[data-testid="stRadio"] > div > label:has(input:checked) {
+    background: linear-gradient(135deg, #2d2520 0%, #3d3028 100%) !important;
+    border-color: #2d2520 !important;
+    color: #fdf8f6 !important;
+    font-weight: 500 !important;
+    box-shadow: 0 4px 16px rgba(45,37,32,0.18) !important;
+}
+
+/* Hide the actual radio circle input */
+[data-testid="stRadio"] > div > label > div:first-child {
+    display: none !important;
+}
+
+/* The text span inside label */
+[data-testid="stRadio"] > div > label > div:last-child p,
+[data-testid="stRadio"] > div > label > div:last-child span,
+[data-testid="stRadio"] > div > label p,
+[data-testid="stRadio"] > div > label span {
+    color: inherit !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+    font-family: inherit !important;
+    margin: 0 !important;
+    background: none !important;
+}
+
+/* Override any Streamlit internal selection/highlight on checked labels */
+[data-testid="stRadio"] > div > label:has(input:checked) *,
+[data-testid="stRadio"] > div > label:has(input:checked) p,
+[data-testid="stRadio"] > div > label:has(input:checked) span {
+    color: #fdf8f6 !important;
+    background: none !important;
 }
 
 /* ── Primary button ── */
 div[data-testid="stButton"] > button[kind="primary"] {
-    background: #2d2520 !important;
+    background: linear-gradient(135deg, #2d2520 0%, #3d3028 100%) !important;
     color: #fdf8f6 !important;
     border: none !important;
     border-radius: 50px !important;
-    padding: 0.65rem 2.2rem !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.9rem !important;
-    font-weight: 400 !important;
-    letter-spacing: 0.04em !important;
-    transition: background 0.2s ease, transform 0.15s ease !important;
-    width: auto !important;
+    padding: 0.75rem 2.4rem !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 0.92rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.05em !important;
+    transition: all 0.25s ease !important;
+    box-shadow: 0 4px 16px rgba(45,37,32,0.18) !important;
 }
 div[data-testid="stButton"] > button[kind="primary"]:hover {
-    background: #c4836a !important;
-    transform: translateY(-1px) !important;
+    background: linear-gradient(135deg, #c4836a 0%, #d4957a 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 24px rgba(196,131,106,0.3) !important;
 }
 
 /* Secondary button */
 div[data-testid="stButton"] > button:not([kind="primary"]) {
     background: transparent !important;
     color: #c4836a !important;
-    border: 1px solid #f0e8e3 !important;
+    border: 1.5px solid #f0e6e0 !important;
     border-radius: 50px !important;
-    padding: 0.5rem 1.6rem !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.85rem !important;
+    padding: 0.55rem 1.6rem !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 0.88rem !important;
     font-weight: 400 !important;
-    letter-spacing: 0.04em !important;
+    transition: all 0.2s ease !important;
 }
 div[data-testid="stButton"] > button:not([kind="primary"]):hover {
     border-color: #c4836a !important;
-    background: #fdf0eb !important;
+    background: #fff8f5 !important;
 }
 
 /* ── Alerts ── */
 [data-testid="stAlert"] {
-    background: #fdf0eb !important;
-    border: 1px solid #f0e8e3 !important;
-    border-radius: 12px !important;
+    background: #fff8f5 !important;
+    border: 1px solid #f5d9cc !important;
+    border-radius: 14px !important;
     color: #7a6860 !important;
     font-size: 0.88rem !important;
+}
+
+/* ── Spinner ── */
+[data-testid="stSpinner"] {
+    color: #c4836a !important;
 }
 
 /* ── Divider ── */
 .soft-divider {
     border: none;
-    border-top: 1px solid #f0e8e3;
-    margin: 2rem 0;
+    border-top: 1px solid #f0e6e0;
+    margin: 2.2rem 0;
+}
+
+/* ── Results header ── */
+.results-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+}
+.results-count {
+    font-size: 0.82rem;
+    color: #9c8b84;
+}
+.results-tag {
+    background: #fff0ea;
+    border: 1px solid #f5d9cc;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    color: #c4836a;
+    font-weight: 500;
 }
 
 /* ── Fade-in animation ── */
 @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(16px); }
+    from { opacity: 0; transform: translateY(20px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.fade-in { animation: fadeUp 0.5s ease both; }
-.fade-in-1 { animation-delay: 0.05s; }
-.fade-in-2 { animation-delay: 0.12s; }
-.fade-in-3 { animation-delay: 0.19s; }
-.fade-in-4 { animation-delay: 0.26s; }
-.fade-in-5 { animation-delay: 0.33s; }
+.fade-in   { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.fade-in-1 { animation-delay: 0.04s; }
+.fade-in-2 { animation-delay: 0.10s; }
+.fade-in-3 { animation-delay: 0.16s; }
+.fade-in-4 { animation-delay: 0.22s; }
+.fade-in-5 { animation-delay: 0.28s; }
 
-/* ── Lookup tab input ── */
-.stTextInput { margin-bottom: 0.5rem !important; }
-
-/* ── Tag line beneath hero ── */
-.tagline-strip {
-    display: flex;
-    gap: 1.5rem;
-    margin-bottom: 3rem;
-    flex-wrap: wrap;
-}
-.tagline-item {
-    font-size: 0.75rem;
-    color: #b8a8a0;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-weight: 400;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-.tagline-dot {
-    width: 5px; height: 5px;
+/* ── Decorative background blob ── */
+.bg-blob {
+    position: fixed;
+    top: -120px;
+    right: -120px;
+    width: 500px;
+    height: 500px;
     border-radius: 50%;
-    background: #e8cfc4;
-    display: inline-block;
+    background: radial-gradient(circle, rgba(232,175,143,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: -1;
 }
 </style>
+
+<div class="bg-blob"></div>
 """, unsafe_allow_html=True)
 
 
@@ -310,24 +497,60 @@ products, reviews = load_data()
 # ── Hero ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="fade-in">
+    <span class="hero-eyebrow">✦ Personalized skincare</span>
     <p class="hero-title">Your skin,<br><em>understood.</em></p>
-    <p class="hero-sub">Tell us about your skin and we'll find products that actually make sense for you.</p>
-    <div class="tagline-strip">
-        <span class="tagline-item"><span class="tagline-dot"></span> Ingredient-aware</span>
-        <span class="tagline-item"><span class="tagline-dot"></span> Skin-type matched</span>
-        <span class="tagline-item"><span class="tagline-dot"></span> No fluff</span>
+    <p class="hero-sub">Tell us about your skin and we'll surface products that genuinely work for you — not just what's trending.</p>
+    <div class="badge-strip">
+        <span class="badge">✦ Ingredient-aware</span>
+        <span class="badge">✦ Skin-type matched</span>
+        <span class="badge">✦ No fluff</span>
+        <span class="badge">✦ Budget-friendly</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 
+# ── Helper: render a product card ─────────────────────────────────────────────
+def render_card(row, index=0):
+    delay_class = f"fade-in fade-in-{min(index+1, 5)}"
+    name   = row.get('product_name', 'Unknown product')
+    brand  = row.get('brand_name', '')
+    price  = row.get('price_usd', 0)
+    rating = row.get('rating', 0)
+
+    stars = "★" * round(rating) + "☆" * (5 - round(rating))
+    ingredients_html = ""
+    if 'key_ingredients_found' in row and pd.notna(row['key_ingredients_found']):
+        raw = str(row['key_ingredients_found'])
+        pills = [
+            f'<span class="card-pill">{ing.strip()}</span>'
+            for ing in raw.split(',') if ing.strip()
+        ]
+        if pills:
+            ingredients_html = f'<div class="card-ingredients">{"".join(pills)}</div>'
+
+    st.markdown(f"""
+<div class="card {delay_class}">
+    <span class="card-rank">#{index+1:02d}</span>
+    <p class="card-product">{name}</p>
+    <p class="card-brand">{brand}</p>
+    <div class="card-meta">
+        <span class="meta-price">${price:.0f}</span>
+        <span class="meta-rating">{stars}</span>
+        <span style="color:#b8a8a0;font-size:0.8rem">{rating:.1f} / 5</span>
+    </div>
+    {ingredients_html}
+</div>
+""", unsafe_allow_html=True)
+
+
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab1, tab2 = st.tabs(["Find Products", "Explore Similar"])
+tab1, tab2 = st.tabs(["✦  Find Products", "◈  Explore Similar"])
 
 # ── Tab 1: Recommendations ────────────────────────────────────────────────────
 with tab1:
 
-    st.markdown('<p class="section-label">Your skin</p>', unsafe_allow_html=True)
+    st.markdown('<span class="section-label">Your skin profile</span>', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -343,35 +566,15 @@ with tab1:
             label_visibility="visible"
         )
 
-    st.markdown('<p class="section-label" style="margin-top:1.8rem">Budget</p>', unsafe_allow_html=True)
+    st.markdown('<span class="section-label" style="margin-top:2rem">Budget</span>', unsafe_allow_html=True)
     budget = st.slider("Max price (USD)", 5, 200, 80, label_visibility="collapsed")
-    st.markdown(f'<p style="font-size:0.82rem;color:#9c8b84;margin-top:-0.5rem">Up to <strong style="color:#2d2520">${budget}</strong></p>', unsafe_allow_html=True)
-    
-    st.markdown('<p class="section-label" style="margin-top:1.8rem">Do you have a purchase history?</p>', unsafe_allow_html=True)
-    st.markdown("""
-<style>
-div[data-testid="stRadio"] label span {
-    color: #1f1a17 !important;
-    font-size: 0.95rem !important;
-    font-weight: 400 !important;
-    opacity: 1 !important;
-}
+    st.markdown(
+        f'<p style="font-size:0.82rem;color:#9c8b84;margin-top:-0.3rem">'
+        f'Showing products up to <strong style="color:#c4836a">${budget}</strong></p>',
+        unsafe_allow_html=True
+    )
 
-div[data-testid="stRadio"] label {
-    color: #1f1a17 !important;
-    font-weight: 500 !important;
-}
-
-div[data-testid="stRadio"] div[role="radio"][aria-checked="true"] span {
-    color: #1f1a17 !important;
-    font-weight: 600 !important;
-}
-
-div[data-testid="stRadio"] {
-    color: #1f1a17 !important;
-}
-</style>
-""", unsafe_allow_html=True)
+    st.markdown('<span class="section-label" style="margin-top:2rem">Purchase history</span>', unsafe_allow_html=True)
 
     has_history = st.radio(
         "History",
@@ -382,15 +585,23 @@ div[data-testid="stRadio"] {
 
     user_id = None
     if has_history == "Yes, use my profile":
-        st.markdown('<p class="section-label" style="margin-top:1.5rem">Your user ID</p>', unsafe_allow_html=True)
-        user_id = st.text_input("User ID", placeholder="e.g. user_00423", label_visibility="collapsed")
+        st.markdown(
+            '<div class="info-panel">🔐 Enter your user ID to get personalised recommendations based on your past purchases and ratings.</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown('<span class="section-label">Your user ID</span>', unsafe_allow_html=True)
+        user_id = st.text_input(
+            "User ID",
+            placeholder="e.g. user_00423",
+            label_visibility="collapsed"
+        )
 
-    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
-    run = st.button("Find my matches", type="primary")
+    st.markdown("<div style='height:1.8rem'></div>", unsafe_allow_html=True)
+    run = st.button("✦  Find my matches", type="primary")
 
     # ── Results ──
     if run:
-        with st.spinner(""):
+        with st.spinner("Finding your perfect matches…"):
             if has_history == "No, I'm new here" or not user_id:
                 recs = cbr.recommend_for_user_profile(
                     skin_type=skin_type,
@@ -412,60 +623,36 @@ div[data-testid="stRadio"] {
         st.markdown("<hr class='soft-divider'>", unsafe_allow_html=True)
 
         if recs.empty:
-            st.info("No matches found — try increasing your budget or selecting a different concern.")
+            st.info("✦ No matches found — try increasing your budget or selecting a different concern.")
         else:
             n = len(recs)
-            st.markdown(
-                f'<p style="font-size:0.82rem;color:#9c8b84;margin-bottom:1.5rem">'
-                f'{n} product{"s" if n != 1 else ""} for <strong style="color:#2d2520">{skin_type.lower()} skin</strong> '
-                f'· {skin_concern.lower()}</p>',
-                unsafe_allow_html=True
-            )
+            st.markdown(f"""
+<div class="results-header">
+    <span class="results-count">{n} product{"s" if n != 1 else ""} found</span>
+    <span class="results-tag">{skin_type} skin</span>
+    <span class="results-tag">{skin_concern}</span>
+</div>""", unsafe_allow_html=True)
 
             for i, (_, row) in enumerate(recs.iterrows()):
-                delay_class = f"fade-in fade-in-{min(i+1, 5)}"
-                name   = row.get('product_name', 'Unknown product')
-                brand  = row.get('brand_name', '')
-                price  = row.get('price_usd', 0)
-                rating = row.get('rating', 0)
-
-                # Key ingredients as pills
-                ingredients_html = ""
-                if 'key_ingredients_found' in row and pd.notna(row['key_ingredients_found']):
-                    raw = str(row['key_ingredients_found'])
-                    pills = [
-                        f'<span class="card-pill">{ing.strip()}</span>'
-                        for ing in raw.split(',') if ing.strip()
-                    ]
-                    if pills:
-                        ingredients_html = f'<div class="card-ingredients">{"".join(pills)}</div>'
-
-                st.markdown(f"""
-<div class="card {delay_class}">
-    <p class="card-product">{name}</p>
-    <p class="card-brand">{brand}</p>
-    <div class="card-meta">
-        <span>${price:.0f}</span>
-        <span style="color:#e8cfc4">·</span>
-        <span>{rating:.1f} &nbsp;★</span>
-    </div>
-    {ingredients_html}
-</div>
-""", unsafe_allow_html=True)
+                render_card(row, i)
 
 
 # ── Tab 2: Similar products ───────────────────────────────────────────────────
 with tab2:
     st.markdown("""
 <div class="fade-in" style="margin-bottom:1.5rem">
-    <p style="font-size:1rem;color:#9c8b84;font-weight:300;margin:0">
-        Found something you like? Search for it and we'll find more like it.
+    <p style="font-size:1rem;color:#9c8b84;font-weight:300;margin:0;line-height:1.7">
+        Found something you love? Search for it and we'll find more products just like it.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-    st.markdown('<p class="section-label">Search a product</p>', unsafe_allow_html=True)
-    query = st.text_input("Product name", placeholder="e.g. CeraVe Moisturizing Cream", label_visibility="collapsed")
+    st.markdown('<span class="section-label">Search a product</span>', unsafe_allow_html=True)
+    query = st.text_input(
+        "Product name",
+        placeholder="e.g. CeraVe Moisturizing Cream",
+        label_visibility="collapsed"
+    )
 
     if query:
         matches = products[
@@ -479,44 +666,17 @@ with tab2:
                     matches['product_id'] == pid]['product_name'].values[0],
                 label_visibility="visible"
             )
-            if st.button("Show similar products"):
-                sims = cbr.recommend_for_product(selected_pid, n=8)
+            if st.button("◈  Show similar products"):
+                with st.spinner("Finding similar products…"):
+                    sims = cbr.recommend_for_product(selected_pid, n=8)
 
                 st.markdown("<hr class='soft-divider'>", unsafe_allow_html=True)
                 st.markdown(
-                    f'<p style="font-size:0.82rem;color:#9c8b84;margin-bottom:1.5rem">'
-                    f'{len(sims)} similar products found</p>',
+                    f'<div class="results-header"><span class="results-count">{len(sims)} similar products found</span></div>',
                     unsafe_allow_html=True
                 )
 
                 for i, (_, row) in enumerate(sims.iterrows()):
-                    delay_class = f"fade-in fade-in-{min(i+1, 5)}"
-                    name   = row.get('product_name', 'Unknown product')
-                    brand  = row.get('brand_name', '')
-                    price  = row.get('price_usd', 0)
-                    rating = row.get('rating', 0)
-
-                    ingredients_html = ""
-                    if 'key_ingredients_found' in row and pd.notna(row['key_ingredients_found']):
-                        raw = str(row['key_ingredients_found'])
-                        pills = [
-                            f'<span class="card-pill">{ing.strip()}</span>'
-                            for ing in raw.split(',') if ing.strip()
-                        ]
-                        if pills:
-                            ingredients_html = f'<div class="card-ingredients">{"".join(pills)}</div>'
-
-                    st.markdown(f"""
-<div class="card {delay_class}">
-    <p class="card-product">{name}</p>
-    <p class="card-brand">{brand}</p>
-    <div class="card-meta">
-        <span>${price:.0f}</span>
-        <span style="color:#e8cfc4">·</span>
-        <span>{rating:.1f} &nbsp;★</span>
-    </div>
-    {ingredients_html}
-</div>
-""", unsafe_allow_html=True)
+                    render_card(row, i)
         else:
-            st.info("No products found — try a shorter or different search term.")
+            st.info("✦ No products found — try a shorter or different search term.")
