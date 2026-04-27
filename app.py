@@ -574,51 +574,18 @@ with tab1:
         unsafe_allow_html=True
     )
 
-    st.markdown('<span class="section-label" style="margin-top:2rem">Purchase history</span>', unsafe_allow_html=True)
-
-    has_history = st.radio(
-        "History",
-        ["No, I'm new here", "Yes, use my profile"],
-        label_visibility="collapsed",
-        horizontal=True
-    )
-
-    user_id = None
-    if has_history == "Yes, use my profile":
-        st.markdown(
-            '<div class="info-panel">🔐 Enter your user ID to get personalised recommendations based on your past purchases and ratings.</div>',
-            unsafe_allow_html=True
-        )
-        st.markdown('<span class="section-label">Your user ID</span>', unsafe_allow_html=True)
-        user_id = st.text_input(
-            "User ID",
-            placeholder="e.g. user_00423",
-            label_visibility="collapsed"
-        )
-
     st.markdown("<div style='height:1.8rem'></div>", unsafe_allow_html=True)
     run = st.button("✦  Find my matches", type="primary")
 
     # ── Results ──
     if run:
         with st.spinner("Finding your perfect matches…"):
-            if has_history == "No, I'm new here" or not user_id:
-                recs = cbr.recommend_for_user_profile(
-                    skin_type=skin_type,
-                    concerns=[skin_concern] + list(SKIN_CONCERN_MAP.get(skin_concern, [])),
-                    budget_max=budget,
-                    n=8
-                )
-            else:
-                recs = hybrid.recommend(
-                    user_id=user_id,
-                    skin_type=skin_type,
-                    skin_concern=skin_concern,
-                    cf_recommender=svd,
-                    reviews=reviews,
-                    n=10
-                )
-                recs = recs[recs['price_usd'] <= budget]
+            recs = cbr.recommend_for_user_profile(
+                skin_type=skin_type,
+                concerns=[skin_concern] + list(SKIN_CONCERN_MAP.get(skin_concern, [])),
+                budget_max=budget,
+                n=8
+            )
 
         st.markdown("<hr class='soft-divider'>", unsafe_allow_html=True)
 
@@ -635,48 +602,3 @@ with tab1:
 
             for i, (_, row) in enumerate(recs.iterrows()):
                 render_card(row, i)
-
-
-# ── Tab 2: Similar products ───────────────────────────────────────────────────
-with tab2:
-    st.markdown("""
-<div class="fade-in" style="margin-bottom:1.5rem">
-    <p style="font-size:1rem;color:#9c8b84;font-weight:300;margin:0;line-height:1.7">
-        Found something you love? Search for it and we'll find more products just like it.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-    st.markdown('<span class="section-label">Search a product</span>', unsafe_allow_html=True)
-    query = st.text_input(
-        "Product name",
-        placeholder="e.g. CeraVe Moisturizing Cream",
-        label_visibility="collapsed"
-    )
-
-    if query:
-        matches = products[
-            products['product_name'].str.contains(query, case=False, na=False)
-        ]
-        if not matches.empty:
-            selected_pid = st.selectbox(
-                "Select the product",
-                matches['product_id'].values,
-                format_func=lambda pid: matches[
-                    matches['product_id'] == pid]['product_name'].values[0],
-                label_visibility="visible"
-            )
-            if st.button("◈  Show similar products"):
-                with st.spinner("Finding similar products…"):
-                    sims = cbr.recommend_for_product(selected_pid, n=8)
-
-                st.markdown("<hr class='soft-divider'>", unsafe_allow_html=True)
-                st.markdown(
-                    f'<div class="results-header"><span class="results-count">{len(sims)} similar products found</span></div>',
-                    unsafe_allow_html=True
-                )
-
-                for i, (_, row) in enumerate(sims.iterrows()):
-                    render_card(row, i)
-        else:
-            st.info("✦ No products found — try a shorter or different search term.")
