@@ -514,10 +514,10 @@ st.markdown("""
 def render_card(row, index=0):
     delay_class = f"fade-in fade-in-{min(index+1, 5)}"
     name   = row.get('product_name', 'Unknown product')
-    brand  = row.get('brand_name', '')
-    price  = row.get('price_usd', 0)
-    rating = row.get('rating', 0)
-
+    brand  = row.get('brand_name', '') or ''
+    price  = float(row.get('price_usd') or 0)
+    rating = float(row.get('rating') or 0)
+    rating = 0.0 if pd.isna(rating) else rating
     stars = "★" * round(rating) + "☆" * (5 - round(rating))
     ingredients_html = ""
     if 'key_ingredients_found' in row and pd.notna(row['key_ingredients_found']):
@@ -602,3 +602,113 @@ with tab1:
 
             for i, (_, row) in enumerate(recs.iterrows()):
                 render_card(row, i)
+# ── Tab 2: Similar Products ───────────────────────────────────────────────────
+with tab2:
+
+    st.markdown("""
+<div class="fade-in" style="margin-bottom:1.5rem">
+    <p style="font-size:1rem;color:#9c8b84;font-weight:300;margin:0">
+        Found something you like? Search for it and we'll find more like it.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown('<p class="section-label">Search a product</p>', unsafe_allow_html=True)
+
+    query = st.text_input(
+        "Product name",
+        placeholder="e.g. CeraVe Moisturizing Cream",
+        label_visibility="collapsed"
+    )
+
+    selected_pid = None
+    if query:
+        matches = products[
+            products['product_name'].str.contains(query, case=False, na=False)
+        ]
+        if not matches.empty:
+            selected_pid = st.selectbox(
+                "Select the product",
+                matches['product_id'].values,
+                format_func=lambda pid: matches[
+                    matches['product_id'] == pid
+                ]['product_name'].values[0],
+                label_visibility="visible"
+            )
+        else:
+            st.markdown(
+                '<div class="info-panel">✦ No products matched — try a shorter keyword.</div>',
+                unsafe_allow_html=True
+            )
+
+    st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
+    show_similar = st.button("◈  Show similar products", type="primary")
+
+    if show_similar:
+        if not selected_pid:
+            st.info("✦ Please search and select a product first.")
+        else:
+            with st.spinner("Finding similar products…"):
+                try:
+                    sims = cbr.recommend_for_product(selected_pid, n=8)
+                except ValueError as e:
+                    sims = pd.DataFrame()
+                    st.info(f"✦ {e}")
+
+            st.markdown("<hr class='soft-divider'>", unsafe_allow_html=True)
+
+            if not sims.empty:
+                # Seed product info panel
+                seed_row = products[products['product_id'] == selected_pid].iloc[0]
+                st.markdown(f"""
+<div class="info-panel">
+    <strong style="color:#2d2520">Similar to:</strong>&nbsp;
+    {seed_row['product_name']}
+    <span style="color:#c4b0a8;font-size:0.8rem;margin-left:0.5rem">
+        {seed_row.get('brand_name', '')}
+    </span>
+</div>""", unsafe_allow_html=True)
+
+                st.markdown(
+                    f'<p style="font-size:0.82rem;color:#9c8b84;margin-bottom:1.5rem">'
+                    f'{len(sims)} similar products found</p>',
+                    unsafe_allow_html=True
+                )
+
+                # Extract key ingredient pills from the products table
+                from src.hybrid_model import KEY_INGREDIENTS
+                pid_to_ingredients = products.set_index('product_id')['ingredients'].to_dict()
+
+                for i, (_, row) in enumerate(sims.iterrows()):
+                    delay_class = f"fade-in fade-in-{min(i+1, 5)}"
+                    name   = row.get('product_name', 'Unknown product')
+                    brand  = row.get('brand_name', '') or ''
+                    price  = float(row.get('price_usd') or 0)
+                    rating = float(row.get('rating') or 0)
+                    rating = 0.0 if pd.isna(rating) else rating
+                    stars  = "★" * round(rating) + "☆" * (5 - round(rating))
+
+                    # Build ingredient pills
+                    ing_text = str(pid_to_ingredients.get(row.get('product_id', ''), '')).lower()
+                    found_ings = [ing for ing in KEY_INGREDIENTS if ing in ing_text]
+                    if found_ings:
+                        pills = ''.join(
+                            f'<span class="card-pill">{ing}</span>' for ing in found_ings
+                        )
+                        ingredients_html = f'<div class="card-ingredients">{pills}</div>'
+                    else:
+                        ingredients_html = ""
+
+                    st.markdown(f"""
+<div class="card {delay_class}">
+    <span class="card-rank">#{i+1:02d}</span>
+    <p class="card-product">{name}</p>
+    <p class="card-brand">{brand}</p>
+    <div class="card-meta">
+        <span class="meta-price">${price:.0f}</span>
+        <span class="meta-rating">{stars}</span>
+        <span style="color:#b8a8a0;font-size:0.8rem">{rating:.1f} / 5</span>
+    </div>
+    {ingredients_html}
+</div>
+""", unsafe_allow_html=True)
