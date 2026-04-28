@@ -76,8 +76,6 @@ pytest_cache/
 # =========================
 # Model Files (IMPORTANT for ML)
 # =========================
-models/
-*.pkl
 *.joblib
 *.h5
 *.model
